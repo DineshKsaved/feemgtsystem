@@ -1,0 +1,24 @@
+spring.application.name=Fee-Management-System
+
+spring.security.user.name=u
+spring.security.user.password=u
+
+invoice.directory=C:\mefolder\nvce gen project\project working folder\Directory for pdf_store
+#/home/user/project/invoices/
+#/var/invoices
+
+spring.datasource.url=jdbc:mysql://localhost:3306/projectfeemgt
+spring.datasource.username=root
+spring.datasource.password=mesql
+spring.jpa.hibernate.ddl-auto=update
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+server.port=8082
+
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=javauserdinesh@gmail.com
+spring.mail.password=hdyj wgww cavj icwg
+spring.mail.protocol=smtp
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+spring.mail.default-encoding=UTF-8
