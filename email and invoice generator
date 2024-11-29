@@ -159,11 +159,15 @@ public class RandDEmailgen {
             document.save(invoiceFile);
         
         String studentEmail = invoice.getPaymentSchedule().getEnrollment().getStudent().getEmail();
+        String studentName=invoice.getPaymentSchedule().getEnrollment().getStudent().getName();
+        String bodyofemail=String.format("Dear %s,\n\nPlease find your payment invoice attached.\n\nThank you!",
+        	    studentName);
         sendEmailWithAttachment(studentEmail, "Your Payment Invoice",
-                "Dear student,\n\nPlease find your payment invoice attached.\n\nThank you!",
-                invoiceFileName);
+        		bodyofemail,invoiceFileName);
+        return String.format("An email has been successfully sent to %s (%s).", studentName, studentEmail);
         }
-        return invoiceFileName;
+       // return invoiceFileName;
+        
     }
     
     
