@@ -1,0 +1,328 @@
+package com.Fee.Management.System.Fee.Management.System.randdpack;
+
+import java.io.File;
+import java.io.IOException;
+
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.stereotype.Controller;
+import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.Fee.Management.System.Fee.Management.System.Model.Invoice;
+import com.Fee.Management.System.Fee.Management.System.Model.PaymentSchedule;
+import com.Fee.Management.System.Fee.Management.System.Repo.Enrollmentrepo;
+import com.Fee.Management.System.Fee.Management.System.Repo.Invoicerepo;
+import com.Fee.Management.System.Fee.Management.System.Repo.PaymentScheduleRepository;
+
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+
+@RestController
+@RequestMapping("/api/RandDEmailgen")
+public class RandDEmailgen {
+
+    @Value("${invoice.directory}")
+    private String invoiceDirectory;
+    
+    private static final String INVOICE_DIRECTORY = "invoices/";
+    @Autowired
+    private Invoicerepo invoiceRepository;
+    @Autowired
+    private Enrollmentrepo enrollmentrepo;
+    @Autowired
+    private JavaMailSender mailSender;
+    /**
+     * Generates an invoice for a given Invoice ID.
+     *
+     * @param invoiceId the ID of the Invoice.
+     * @return the file path of the generated invoice.
+     * @throws IOException if there is an error creating the invoice file.
+     */
+    @GetMapping("/test/{id}")
+    public String generateInvoice(@PathVariable("id") Long invoiceId) throws IOException, MessagingException {
+        // Fetch the Invoice from the repository
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid Invoice ID: " + invoiceId));
+
+        // Access the associated PaymentSchedule
+        var paymentSchedule = invoice.getPaymentSchedule();
+
+        // Create directory if it doesn't exist
+        File dir = new File(INVOICE_DIRECTORY);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        // Define invoice file name and path
+        String invoiceFileName = INVOICE_DIRECTORY + "Invoice_" + invoice.getId() + ".pdf";
+        File invoiceFile = new File(invoiceFileName);
+
+        // Generate the PDF invoice
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+
+            PDPageContentStream contentStream = new PDPageContentStream(document, page);
+            
+            // Add Logo to Top-Left Corner
+            String logoPath = "C:/mefolder/nvce gen project/uniq logo.png";//"path/to/logo.png"; // Replace with the actual path to your logo file
+            PDImageXObject logo = PDImageXObject.createFromFile(logoPath, document);
+            float logoWidth = 250; // Adjust the width as needed
+            float logoHeight = 100; // Adjust the height as needed
+            contentStream.drawImage(logo, 50, page.getMediaBox().getHeight() - 50 - logoHeight, logoWidth, logoHeight);
+
+            contentStream.setFont(PDType1Font.HELVETICA_BOLD, 13);
+            contentStream.beginText();
+            contentStream.setLeading(14.5f);
+            //contentStream.newLineAtOffset(50, 700);
+            contentStream.newLineAtOffset(page.getMediaBox().getWidth() - 200, page.getMediaBox().getHeight() - 60); 
+            contentStream.showText("Invoice ID: #" + invoice.getId());
+            contentStream.newLine();
+           // contentStream.endText();
+            
+            contentStream.setFont(PDType1Font.HELVETICA, 12);
+            //contentStream.beginText();
+            contentStream.newLineAtOffset(0, -15); // Move down for the next line
+            contentStream.showText("Payment Date: " + invoice.getPaymentDate());
+            contentStream.newLine();
+            contentStream.endText();
+            
+            float yStartBilledTo = 750 - logoHeight - 20;
+            contentStream.beginText();
+            contentStream.setFont(PDType1Font.HELVETICA, 12);
+            contentStream.newLineAtOffset(50, yStartBilledTo);
+            contentStream.setLeading(14.5f);
+            contentStream.showText("Billed To: " );
+            contentStream.newLine();
+            contentStream.showText("-----------------------------------");
+            contentStream.newLine();
+            contentStream.showText("Student Name: " + invoice.getPaymentSchedule().getEnrollment().getStudent().getName());
+            contentStream.newLine();
+            contentStream.showText("Enrollment ID: " + invoice.getPaymentSchedule().getEnrollment().getId());
+            contentStream.newLine();
+            contentStream.showText("Address: " + invoice.getPaymentSchedule().getEnrollment().getStudent().getAddress());
+           // contentStream.showText("--------------------------");
+            contentStream.endText();
+            
+           
+            
+            float yStartTable = yStartBilledTo - 80; 
+           /* float yPosition = 600; // Start Y position for the table
+            float margin = 50;
+            float tableWidth = page.getMediaBox().getWidth() - 2 * margin;
+            float yStartNewPage = page.getMediaBox().getHeight() - margin;
+            float bottomMargin = 50;
+            float rowHeight = 20;
+            int cols = 3;
+            float colWidth = tableWidth / cols;
+      
+       */
+            // Add Invoice Details
+          
+            String courseName=invoice.getPaymentSchedule().getEnrollment().getCourse().getName();
+            double price = paymentSchedule.getAmount();
+            int installmentsRemaining = paymentSchedule.getInstallmentNumber();
+            
+         // Calculate SGST and CGST
+            double discount = -200; // Example discount, you can dynamically fetch or calculate
+            double sgst = price * 0.06;
+            double cgst = price * 0.06;
+            double totalAmount = price + sgst + cgst + discount;
+            
+         // Header Row
+            String[] headers = {"Course", "Price", "Installments Remaining"};
+            String[][] data = {
+                    {courseName,String.valueOf(price), String.valueOf(installmentsRemaining)},
+                    //{"", String.valueOf(price), ""},
+                   // {"Installments Remaining", "", String.valueOf(installmentsRemaining)},
+                    {"Discount", String.valueOf(discount), ""},
+                    {"SGST", String.valueOf(sgst), ""},
+                    {"CGST", String.valueOf(cgst), ""},
+                    {"Total", String.valueOf(totalAmount), ""}
+            };
+
+            drawTable(page, contentStream, yStartTable, 50, headers, data, 20, 3, 150);
+
+         /*   contentStream.showText("Course: " + invoice.getPaymentSchedule().getEnrollment().getCourse().getName());
+            contentStream.newLine();
+            contentStream.showText("Price: " + invoice.getPaymentSchedule().getAmount());
+           
+          double amount = invoice.getPaymentSchedule().getAmount();
+
+         // Calculate CGST (6% of the amount)
+         double cgst = amount * 0.06;
+         // Calculate SGST (6% of the amount)
+         double sgst = amount * 0.06;
+         // Calculate the total amount (Amount + CGST + SGST)
+         double totalAmount = amount + cgst + sgst;
+
+         // Add CGST and SGST
+         contentStream.newLine();
+         contentStream.showText("CGST (6%): $" + cgst);
+         contentStream.newLine();
+         contentStream.showText("SGST (6%): $" + sgst);
+         contentStream.newLine();
+         
+         contentStream.showText("Total Amount: $" + totalAmount);
+           
+         */
+         
+            /* 
+            
+            contentStream.showText("Bank Details: " + invoice.getBankDetails());
+            contentStream.newLine();
+            contentStream.showText("CGST (6%): $" + invoice.getCGST());
+            contentStream.newLine();
+            contentStream.showText("SGST (6%): $" + invoice.getSGST());
+            contentStream.newLine();
+            contentStream.showText("Total Amount: $" + invoice.getTotal());
+                     
+            contentStream.beginText();
+         contentStream.newLine();
+         contentStream.newLineAtOffset(50, 500); // Start writing text at a specific position on the page
+         contentStream.setLeading(14.5f); // Set line spacing
+            contentStream.showText("Installment Number: " + invoice.getPaymentSchedule().getInstallmentNumber());
+            contentStream.newLine();
+            contentStream.showText("Due Date: " + invoice.getPaymentSchedule().getDueDate());
+            contentStream.newLine();
+            contentStream.showText("Amount: $" + invoice.getPaymentSchedule().getAmount());
+            contentStream.newLine();
+            contentStream.newLine();
+            
+               */
+            float yStartAddress = yStartTable - (data.length + 1) * 20 - 30; // Adjust dynamically based on table height
+            contentStream.beginText();
+            contentStream.setFont(PDType1Font.HELVETICA, 12);
+            contentStream.newLineAtOffset(50, yStartAddress);
+            contentStream.showText(" #1 Shifa Arcade, 3rd Floor, Bharathi Nagar 1st Street,");
+            contentStream.newLine();
+            contentStream.showText(" North Usman Road, T – Nagar,");
+            contentStream.newLine();
+            contentStream.showText(" Chennai – 600 017.");
+            contentStream.newLine();
+            contentStream.showText(" 96001 14466.");
+            contentStream.endText();
+            
+         // Thank You Message to the Right
+            float pageWidth = page.getMediaBox().getWidth();
+            float xStartThankYou = pageWidth - 200; // Adjust X to place it on the right
+            float yStartThankYou = yStartAddress - 20; // Position slightly below the address
+
+            contentStream.beginText();
+            contentStream.setFont(PDType1Font.HELVETICA_BOLD, 12);
+            contentStream.newLineAtOffset(xStartThankYou, yStartThankYou);
+            contentStream.showText("Thank you for your payment!");
+            contentStream.endText();
+
+           
+           
+            
+            
+         // Bottom-Center: Auto-Generated Invoice Note
+            float xStartNote = (pageWidth / 2) - 150; // Center the note (adjust width as needed)
+            float yStartNote = 20; // Position just above the bottom margin
+
+            contentStream.beginText();
+            contentStream.setFont(PDType1Font.HELVETICA_OBLIQUE, 10);
+            contentStream.newLineAtOffset(xStartNote, yStartNote);
+            contentStream.showText("Note:-This is an auto-generated invoice copy and no signature is required.");
+            contentStream.endText();
+            
+            contentStream.close();
+
+            // Save the document
+            document.save(invoiceFile);
+        
+        String studentEmail = invoice.getPaymentSchedule().getEnrollment().getStudent().getEmail();
+        String studentName=invoice.getPaymentSchedule().getEnrollment().getStudent().getName();
+        String bodyofemail=String.format("Dear %s,\n\nPlease find your payment invoice attached.\n\nThank you!",
+        	    studentName);
+        sendEmailWithAttachment(studentEmail, "Your Payment Invoice",
+        		bodyofemail,invoiceFileName);
+        return String.format("An email has been successfully sent to %s (%s).", studentName, studentEmail);
+        }
+       // return invoiceFileName;
+        
+    }
+    
+    
+    private void sendEmailWithAttachment(String to, String subject, String body, String attachmentPath) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        helper.setTo(to);
+        helper.setSubject(subject);
+        helper.setText(body);
+
+        // Add attachment
+        FileSystemResource file = new FileSystemResource(new File(attachmentPath));
+        helper.addAttachment(file.getFilename(), file);
+
+        // Send email
+        mailSender.send(message);
+    }
+    
+    
+    
+    private void drawTable(PDPage page, PDPageContentStream contentStream, float y, float margin, 
+            String[] headers, String[][] content, float rowHeight, int cols, float colWidth) throws IOException {
+
+float tableWidth = colWidth * cols;
+float nextY = y;
+
+// Draw Headers
+contentStream.setFont(PDType1Font.HELVETICA_BOLD, 12);
+for (int i = 0; i < headers.length; i++) {
+contentStream.beginText();
+contentStream.newLineAtOffset(margin + i * colWidth + 5, nextY - rowHeight / 2);
+contentStream.showText(headers[i]);
+contentStream.endText();
+}
+nextY -= rowHeight;
+
+// Draw Rows
+contentStream.setFont(PDType1Font.HELVETICA, 12);
+for (String[] row : content) {
+for (int i = 0; i < cols; i++) {
+ String text = i < row.length ? row[i] : "";
+ contentStream.beginText();
+ contentStream.newLineAtOffset(margin + i * colWidth + 5, nextY - rowHeight / 2);
+ contentStream.showText(text);
+ contentStream.endText();
+}
+nextY -= rowHeight;
+}
+
+// Draw Borders
+float yLine = y;
+contentStream.setLineWidth(0.5f);
+
+for (int i = 0; i <= content.length + 1; i++) {
+contentStream.moveTo(margin, yLine);
+contentStream.lineTo(margin + tableWidth, yLine);
+contentStream.stroke();
+yLine -= rowHeight;
+}
+
+float xLine = margin;
+for (int i = 0; i <= cols; i++) {
+contentStream.moveTo(xLine, y);
+contentStream.lineTo(xLine, y - rowHeight * (content.length + 1));
+contentStream.stroke();
+xLine += colWidth;
+}
+}
+    
+}
